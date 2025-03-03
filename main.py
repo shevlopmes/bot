@@ -557,7 +557,7 @@ async def nightly_usage_prompt(context: ContextTypes.DEFAULT_TYPE):
             reply_markup = InlineKeyboardMarkup(keyboard)
             await bot.send_message(
                 chat_id=user_id,
-                text="Did you set your new wallpaper today?",
+                text="Would you set this image as your wallpaper?",
                 reply_markup=reply_markup
             )
         except Exception as e:
