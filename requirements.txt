@@ -4,3 +4,5 @@ python-telegram-bot[job-queue]
 pytz
 flask
 mysql-connector-python
+aiohttp
+asyncio
