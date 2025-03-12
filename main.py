@@ -1,8 +1,7 @@
 import logging
-import asyncio
+
 import random
 import requests
-import aiohttp
 # Removed `import sqlite3`
 import os
 from datetime import datetime, timedelta
@@ -42,7 +41,7 @@ DB_USER = os.getenv("DB_USER")
 DB_PASS = os.getenv("DB_PASS")
 DB_NAME = os.getenv("DB_NAME")
 
-logging.basicConfig(level=logging.WARN)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 cyprus_tz = pytz.timezone("Asia/Nicosia")
@@ -84,33 +83,33 @@ def init_db():
         c = conn.cursor()
 
         c.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            user_id BIGINT PRIMARY KEY,
-            user_group VARCHAR(50) NOT NULL,
-            wallpapers_used INT NOT NULL DEFAULT 0,
-            wallpapers_received INT NOT NULL DEFAULT 0,
-            chosen_category VARCHAR(255),
-            last_category_click VARCHAR(50)
-        )
-        """)
+         CREATE TABLE IF NOT EXISTS users (
+             user_id BIGINT PRIMARY KEY,
+             user_group VARCHAR(50) NOT NULL,
+             wallpapers_used INT NOT NULL DEFAULT 0,
+             wallpapers_received INT NOT NULL DEFAULT 0,
+             chosen_category VARCHAR(255),
+             last_category_click VARCHAR(50)
+         )
+         """)
 
         c.execute("""
-        CREATE TABLE IF NOT EXISTS images (
-            id INT PRIMARY KEY AUTO_INCREMENT,
-            category_key VARCHAR(255) NOT NULL,
-            image_id VARCHAR(100) NOT NULL,
-            image_url VARCHAR(255) NOT NULL
-        )
-        """)
+         CREATE TABLE IF NOT EXISTS images (
+             id INT PRIMARY KEY AUTO_INCREMENT,
+             category_key VARCHAR(255) NOT NULL,
+             image_id VARCHAR(100) NOT NULL,
+             image_url VARCHAR(255) NOT NULL
+         )
+         """)
 
         c.execute("""
-        CREATE TABLE IF NOT EXISTS user_images (
-            id INT PRIMARY KEY AUTO_INCREMENT,
-            user_id BIGINT NOT NULL,
-            image_id VARCHAR(100) NOT NULL,
-            UNIQUE KEY unique_user_image (user_id, image_id)
-        )
-        """)
+         CREATE TABLE IF NOT EXISTS user_images (
+             id INT PRIMARY KEY AUTO_INCREMENT,
+             user_id BIGINT NOT NULL,
+             image_id VARCHAR(100) NOT NULL,
+             UNIQUE KEY unique_user_image (user_id, image_id)
+         )
+         """)
 
         conn.commit()
         c.close()
@@ -127,10 +126,10 @@ def get_or_create_user(user_id: int) -> Dict[str, Any]:
     try:
         c = conn.cursor(dictionary=True)
         c.execute("""
-            SELECT user_id, user_group, wallpapers_used, wallpapers_received, chosen_category, last_category_click
-            FROM users
-            WHERE user_id = %s
-        """, (user_id,))
+             SELECT user_id, user_group, wallpapers_used, wallpapers_received, chosen_category, last_category_click
+             FROM users
+             WHERE user_id = %s
+         """, (user_id,))
         row = c.fetchone()
         if row:
             return {
@@ -144,9 +143,9 @@ def get_or_create_user(user_id: int) -> Dict[str, Any]:
         else:
             group = random.choice(["narrow", "wide"])
             c.execute("""
-                INSERT INTO users (user_id, user_group)
-                VALUES (%s, %s)
-            """, (user_id, group))
+                 INSERT INTO users (user_id, user_group)
+                 VALUES (%s, %s)
+             """, (user_id, group))
             conn.commit()
             return {
                 "user_id": user_id,
@@ -168,13 +167,13 @@ def update_user(user: Dict[str, Any]):
     try:
         c = conn.cursor()
         c.execute("""
-            UPDATE users
-            SET user_group = %s,
-                wallpapers_used = %s,
-                wallpapers_received = %s,
-                chosen_category = %s
-            WHERE user_id = %s
-        """, (
+             UPDATE users
+             SET user_group = %s,
+                 wallpapers_used = %s,
+                 wallpapers_received = %s,
+                 chosen_category = %s
+             WHERE user_id = %s
+         """, (
             user["group"],
             user["wallpapers_used"],
             user["wallpapers_received"],
@@ -194,14 +193,14 @@ def fetch_images_from_db(category_key: str, user_id: int) -> List[Dict[str, str]
     try:
         c = conn.cursor(dictionary=True)
         c.execute("""
-        SELECT i.id, i.image_id, i.image_url
-          FROM images i
-     LEFT JOIN user_images ui
-            ON i.image_id = ui.image_id
-           AND ui.user_id = %s
-         WHERE i.category_key = %s
-           AND ui.image_id IS NULL
-        """, (user_id, category_key))
+         SELECT i.id, i.image_id, i.image_url
+           FROM images i
+      LEFT JOIN user_images ui
+             ON i.image_id = ui.image_id
+            AND ui.user_id = %s
+          WHERE i.category_key = %s
+            AND ui.image_id IS NULL
+         """, (user_id, category_key))
         rows = c.fetchall()
         return [{
             "db_id": r["id"],
@@ -214,16 +213,17 @@ def fetch_images_from_db(category_key: str, user_id: int) -> List[Dict[str, str]
         conn.close()
 
 
-async def add_images_to_db(category_key: str, images: List[Dict[str, str]]):
+def add_images_to_db(category_key: str, images: List[Dict[str, str]]):
     conn = get_connection()
-    c = await asyncio.to_thread(conn.cursor)
+    c = None
     try:
+        c = conn.cursor()
         for img in images:
             c.execute("""
-                    INSERT INTO images (category_key, image_id, image_url)
-                    VALUES (%s, %s, %s)
-                """, (category_key, img["id"], img["url"]))
-        await asyncio.to_thread(conn.commit)
+                 INSERT INTO images (category_key, image_id, image_url)
+                 VALUES (%s, %s, %s)
+             """, (category_key, img["id"], img["url"]))
+        conn.commit()
     finally:
         if c is not None:
             c.close()  # Close only if 'c' was successfully created
@@ -236,9 +236,9 @@ def mark_image_as_used(user_id: int, image_id: str):
     try:
         c = conn.cursor()
         c.execute("""
-            INSERT IGNORE INTO user_images (user_id, image_id)
-            VALUES (%s, %s)
-        """, (user_id, image_id))
+             INSERT IGNORE INTO user_images (user_id, image_id)
+             VALUES (%s, %s)
+         """, (user_id, image_id))
         conn.commit()
     finally:
         if c is not None:
@@ -260,10 +260,10 @@ def update_category_click(user_id: int):
     try:
         c = conn.cursor()
         c.execute("""
-            UPDATE users 
-               SET last_category_click = %s 
-             WHERE user_id = %s
-        """, (datetime.now().isoformat(), user_id))
+             UPDATE users 
+                SET last_category_click = %s 
+              WHERE user_id = %s
+         """, (datetime.now().isoformat(), user_id))
         conn.commit()
     finally:
         if c is not None:
@@ -274,8 +274,8 @@ def update_category_click(user_id: int):
 # -------------------------
 # FETCH FROM UNSPLASH
 # -------------------------
-async def fetch_images_from_unsplash(query: str, count: int = 5) -> List[Dict[str, str]]:
-    logger.warning("Fetching from unsplash")
+def fetch_images_from_unsplash(query: str, count: int = 5) -> List[Dict[str, str]]:
+    logger.info("Fetching from unsplash")
     url = "https://api.unsplash.com/photos/random"
     params = {
         "query": query,
@@ -285,19 +285,18 @@ async def fetch_images_from_unsplash(query: str, count: int = 5) -> List[Dict[st
     }
     results = []
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params, timeout=10) as resp:
-                if resp.status_code == 200:
-                    data = resp.json()
-                    for item in data:
-                        results.append({
-                            "id": item["id"],
-                            "url": item["urls"]["regular"]
-                        })
-                elif resp.status_code == 403:
-                    logger.error(f"Limit is exceeded! Unsplash returned {resp.status_code}: {resp.text}")
-                else:
-                    logger.error(f"Unsplash returned {resp.status_code}: {resp.text}")
+        resp = requests.get(url, params=params, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            for item in data:
+                results.append({
+                    "id": item["id"],
+                    "url": item["urls"]["regular"]
+                })
+        elif resp.status_code == 403:
+            logger.warning(f"Limit is exceeded! Unsplash returned {resp.status_code}: {resp.text}")
+        else:
+            logger.warning(f"Unsplash returned {resp.status_code}: {resp.text}")
     except Exception as e:
         logger.error(f"Error fetching from Unsplash: {e}")
     return results
@@ -308,7 +307,7 @@ async def fetch_images_from_unsplash(query: str, count: int = 5) -> List[Dict[st
 # -------------------------
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    logger.warning(f"User {user_id} started")
+    logger.info(f"User {user_id} started")
     user = get_or_create_user(user_id)
 
     await update.message.reply_text(
@@ -321,7 +320,7 @@ async def wide_category_callback(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
     user_id = query.from_user.id
     user = get_or_create_user(user_id)
-    logger.warning(f"User {user_id} chose wide category")
+    logger.info(f"User {user_id} chose wide category")
 
     _, category = query.data.split(":", 1)  # "cat:Nature"
     subcats = wide_categories.get(category, [])
@@ -351,7 +350,7 @@ async def wide_subcategory_callback(update: Update, context: ContextTypes.DEFAUL
     await query.answer()
     user_id = query.from_user.id
     user = get_or_create_user(user_id)
-    logger.warning(f"User {user_id} chose wide subcategory")
+    logger.info(f"User {user_id} chose wide subcategory")
 
     if not check_category_limit(user):
         await context.bot.send_message(chat_id=user_id, text="You can get only one wallpaper a day.")
@@ -371,7 +370,7 @@ async def narrow_category_callback(update: Update, context: ContextTypes.DEFAULT
     await query.answer()
     user_id = query.from_user.id
     user = get_or_create_user(user_id)
-    logger.warning(f"User {user_id} chose narrow category")
+    logger.info(f"User {user_id} chose narrow category")
 
     if not check_category_limit(user):
         await context.bot.send_message(chat_id=user_id, text="You can only get one wallpaper a day.")
@@ -388,13 +387,13 @@ async def narrow_category_callback(update: Update, context: ContextTypes.DEFAULT
 
 async def send_wallpaper_to_user(user_id: int, category_key: str, context: ContextTypes.DEFAULT_TYPE):
     # 1) Check DB for unused images in the requested category
-    logger.warning(f"Trying to  send wallpapers for user {user_id}")
+    logger.info(f"Trying to  send wallpapers for user {user_id}")
     images = fetch_images_from_db(category_key, user_id)
     if not images:
         # 2) If none in cache, fetch from Unsplash
-        new_images = await fetch_images_from_unsplash(category_key, count=5)
+        new_images = fetch_images_from_unsplash(category_key, count=5)
         if new_images:
-            await add_images_to_db(category_key, new_images)
+            add_images_to_db(category_key, new_images)
             # Recheck the DB
             images = fetch_images_from_db(category_key, user_id)
 
@@ -443,42 +442,47 @@ async def nightly_prefetch(context: ContextTypes.DEFAULT_TYPE):
 
     Each category or subcategory => 1 request => fetch 5 images from Unsplash.
     """
-    logger.warning("Starting nightly prefetch...")
+    logger.info("Starting nightly prefetch...")
 
     requests_this_hour = 0
     hour_start = datetime.now()
 
-    async def check_rate_limit(requests_this_hour, hour_start):
+    def check_rate_limit():
+        nonlocal requests_this_hour, hour_start
         # If we've made 45 requests in this hour, sleep for an hour
         if requests_this_hour >= 45:
-            logger.warning("Hit 45 requests this hour, sleeping for 1 hour to respect rate limit...")
-            await asyncio.sleep(3600)
-            return 0, datetime.now()
-        elif (datetime.now() - hour_start) > timedelta(hours=1):
-            return 0, datetime.now()  # Reset after an hour
-        return requests_this_hour, hour_start
+            logger.info("Hit 45 requests this hour, sleeping for 1 hour to respect rate limit...")
+            time.sleep(3600)  # blocks for 1 hour
+            # reset counters
+            requests_this_hour = 0
+            hour_start = datetime.now()
+        else:
+            # Also, if an hour has passed since hour_start, reset automatically
+            if (datetime.now() - hour_start) > timedelta(hours=1):
+                requests_this_hour = 0
+                hour_start = datetime.now()
 
     # 1) Prefetch for NARROW categories (just the category name)
     for cat in narrow_categories:
-        requests_this_hour, hour_start = await check_rate_limit(requests_this_hour, hour_start)
-        logger.warning(f"Fetching from Unsplash for narrow category: {cat}")
-        new_imgs = await fetch_images_from_unsplash(cat, count=5)
+        check_rate_limit()
+        logger.info(f"Fetching from Unsplash for narrow category: {cat}")
+        new_imgs = fetch_images_from_unsplash(cat, count=5)
         requests_this_hour += 1  # We made one request to Unsplash
         if new_imgs:
-            await add_images_to_db(cat, new_imgs)
+            add_images_to_db(cat, new_imgs)
 
     # 2) Prefetch for WIDE subcategories
     for main_cat, subcats in wide_categories.items():
         for subcat in subcats:
-            await check_rate_limit()
+            check_rate_limit()
             cat_key = f"{main_cat}:{subcat}"
-            logger.warning(f"Fetching from Unsplash for wide subcategory: {cat_key}")
-            new_imgs = await fetch_images_from_unsplash(subcat, count=5)
+            logger.info(f"Fetching from Unsplash for wide subcategory: {cat_key}")
+            new_imgs = fetch_images_from_unsplash(subcat, count=5)
             requests_this_hour += 1
             if new_imgs:
-                await add_images_to_db(cat_key, new_imgs)
+                add_images_to_db(cat_key, new_imgs)
 
-    logger.warning("Nightly prefetch complete!")
+    logger.info("Nightly prefetch complete!")
 
 
 # -------------------------
@@ -486,7 +490,7 @@ async def nightly_prefetch(context: ContextTypes.DEFAULT_TYPE):
 # -------------------------
 async def morning_wallpaper_distribution(context: ContextTypes.DEFAULT_TYPE):
     """Sends a category selection message to all users in the morning."""
-    logger.warning("Running morning wallpaper distribution...")
+    logger.info("Running morning wallpaper distribution...")
     bot = context.bot
 
     conn = get_connection()
@@ -504,25 +508,27 @@ async def morning_wallpaper_distribution(context: ContextTypes.DEFAULT_TYPE):
             c.close()  # Close only if 'c' was successfully created
         conn.close()
 
-    tasks = []
-
     for user in users:
         user_id, group = user["user_id"], user["user_group"]
-        if group == "wide":
-            keyboard = [[InlineKeyboardButton(cat, callback_data=f"cat:{cat}")] for cat in wide_categories.keys()]
-        else:
-            keyboard = [[InlineKeyboardButton(cat, callback_data=f"narrow_cat:{cat}")] for cat in narrow_categories]
+        try:
+            if group == "wide":
+                keyboard = [[InlineKeyboardButton(cat, callback_data=f"cat:{cat}")] for cat in wide_categories.keys()]
+            else:
+                keyboard = [[InlineKeyboardButton(cat, callback_data=f"narrow_cat:{cat}")] for cat in narrow_categories]
 
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        tasks.append(
-            bot.send_message(chat_id=user_id, text="Good morning! Choose a category:", reply_markup=reply_markup))
-
-    await asyncio.gather(*tasks)
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await bot.send_message(
+                chat_id=user_id,
+                text="Good morning! Choose a category for today's wallpaper:",
+                reply_markup=reply_markup
+            )
+        except Exception as e:
+            logger.error(f"Error sending morning prompt to user {user_id}: {e}")
 
 
 async def nightly_usage_prompt(context: ContextTypes.DEFAULT_TYPE):
     """Asks users if they used their wallpaper at 22:00."""
-    logger.warning("Running nightly usage prompt job...")
+    logger.info("Running nightly usage prompt job...")
     bot = context.bot
 
     conn = get_connection()
@@ -576,7 +582,7 @@ async def usage_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def daily_summary(context: ContextTypes.DEFAULT_TYPE):
     """Gathers usage stats for 'narrow' and 'wide' user groups and sends a summary to the bot owner."""
-    logger.warning("Generating daily summary...")
+    logger.info("Generating daily summary...")
     bot = context.bot
 
     conn = get_connection()
@@ -586,9 +592,9 @@ async def daily_summary(context: ContextTypes.DEFAULT_TYPE):
 
         # Narrow group statistics
         c.execute("""
-            SELECT IFNULL(SUM(wallpapers_used), 0) AS used, IFNULL(SUM(wallpapers_received), 0) AS received
-            FROM users WHERE user_group = 'narrow'
-        """)
+             SELECT IFNULL(SUM(wallpapers_used), 0) AS used, IFNULL(SUM(wallpapers_received), 0) AS received
+             FROM users WHERE user_group = 'narrow'
+         """)
         narrow_stats = c.fetchone()
         narrow_used = narrow_stats["used"]
         narrow_received = narrow_stats["received"]
@@ -596,9 +602,9 @@ async def daily_summary(context: ContextTypes.DEFAULT_TYPE):
 
         # Wide group statistics
         c.execute("""
-            SELECT IFNULL(SUM(wallpapers_used), 0) AS used, IFNULL(SUM(wallpapers_received), 0) AS received
-            FROM users WHERE user_group = 'wide'
-        """)
+             SELECT IFNULL(SUM(wallpapers_used), 0) AS used, IFNULL(SUM(wallpapers_received), 0) AS received
+             FROM users WHERE user_group = 'wide'
+         """)
         wide_stats = c.fetchone()
         wide_used = wide_stats["used"]
         wide_received = wide_stats["received"]
@@ -606,9 +612,9 @@ async def daily_summary(context: ContextTypes.DEFAULT_TYPE):
 
         # Overall statistics
         c.execute("""
-            SELECT IFNULL(SUM(wallpapers_used), 0) AS used, IFNULL(SUM(wallpapers_received), 0) AS received
-            FROM users
-        """)
+             SELECT IFNULL(SUM(wallpapers_used), 0) AS used, IFNULL(SUM(wallpapers_received), 0) AS received
+             FROM users
+         """)
         total_stats = c.fetchone()
         total_used = total_stats["used"]
         total_received = total_stats["received"]
@@ -692,7 +698,7 @@ def main():
 
     job_queue.run_daily(
         nightly_prefetch,
-        time=dt_time(hour=1, minute=0, second=0, tzinfo=cyprus_tz),
+        time=dt_time(hour=3, minute=0, second=0, tzinfo=cyprus_tz),
         days=(0, 1, 2, 3, 4, 5, 6)
     )
 
